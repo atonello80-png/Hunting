@@ -1,0 +1,8 @@
+HUNTING 14 – Altane e parcheggi
+
+Windows: apri index.html con Chrome, con Internet per visualizzare satellite e percorsi.
+iPhone: pubblica tutti i file su un sito HTTPS, apri index.html con Safari e usa Condividi > Aggiungi alla schermata Home.
+
+Altane e parcheggi vengono salvati automaticamente dopo il clic sulla mappa. Importa i backup JSON delle versioni precedenti.
+
+Non sono salvate le tracce stradali. La navigazione stradale e le immagini satellitari richiedono Internet. La cache PWA non contiene mappe satellitari offline e non garantisce il funzionamento completo senza connessione. Conserva backup JSON.
