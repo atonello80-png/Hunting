@@ -1,0 +1,1 @@
+Hunting 39: GPS blu con aggiornamento continuo, cerchio precisione, attiva/disattiva. Lista altane e mostra parcheggio. Nessun calcolo percorso. Caricare 5 file web nella cartella prova39. Aprire una volta online per memorizzare i file. GPS richiede permesso Posizione e HTTPS. Conservare prova33.
