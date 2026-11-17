@@ -1,0 +1,6 @@
+Hunting 30 - VEPAR Oprtalj
+
+Scarica confine ufficiale tramite pulsante 'Confine VEPAR' (richiede CORS del servizio ministeriale). Se Safari blocca la richiesta, importare GeoJSON ufficiale. Non è incluso un perimetro inventato.
+Download unico: intera riserva zoom 14-16; tutte le altane zoom 17-19 entro 800 metri; deduplicazione per anno WMS e tassello; interruzione e ripresa tramite cache.
+La cache Safari può essere rimossa e risposte opache non garantiscono immagini valide. Non eliminare prova29.
+Fonte confini: https://ags.ribarstvo.hr/arcgis/rest/services/lovstvo/granica_lovista/MapServer/0
