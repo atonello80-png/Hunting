@@ -1,0 +1,1 @@
+Hunting 36: primo navigatore automobilistico offline. Il percorso usa solo la rete stradale OSM incorporata e non chiama Google Maps. Le strade classificate track e i sentieri sono esclusi. Se la rete è incompleta, il percorso non viene inventato. GPS richiesto. Verificare la segnaletica, non usare il telefono durante la guida. Conservare prova33.
