@@ -1,0 +1,1 @@
+Hunting 42: pulsanti Menu, Punti e Altane corretti; icone tonde senza etichette. Caricare index.html, sw.js, manifest.webmanifest, localita-istria.js e confine-vepar.js nella cartella prova42. Conservare prova39.
