@@ -1,0 +1,100 @@
+<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#183e31"><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><title>Hunting 24 – Ortofoto offline</title><style>html,body{margin:0;height:100%;font:15px system-ui}#map{height:100dvh;background:#dce4dd}.top{position:absolute;z-index:1000;top:10px;left:10px;right:10px;background:#fff;padding:9px;border-radius:12px;box-shadow:0 2px 12px #0003;display:flex;gap:6px;flex-wrap:wrap;align-items:center}.bottom{position:absolute;z-index:1000;bottom:20px;left:10px;right:10px;display:flex;gap:8px}.bottom button{flex:1;padding:15px 4px;font-weight:700}.top button,.top select{padding:8px;border-radius:7px;border:1px solid #bbb;background:white}button.active{background:#216b4c;color:white}.small{font-size:11px;color:#444;flex-basis:100%}.leaflet-control-attribution{font-size:10px!important}.hunting-place{pointer-events:none!important}.hunting-place span{display:inline-block;transform:translate(-50%,-50%);white-space:nowrap;color:#17272a;font-weight:700;text-shadow:-1px -1px 2px #fff,1px 1px 2px #fff,1px -1px 2px #fff,-1px 1px 2px #fff,0 0 4px #fff}.hunting-place .big{font-size:17px}.hunting-place .smallplace{font-size:14px;font-weight:700}</style></head><body><div id="map"></div><div class="top"><b>Hunting 24</b><select id="year"><option value="2024">DGU 2024</option><option value="2025_2026">DGU 2025/26</option></select><button id="gps">◎ GPS</button><button id="names">◉ Località</button><button id="refreshNames">↓ Scarica nomi zona</button><button id="importNames">Importa nomi</button><input type="file" id="namesFile" accept=".json,.geojson,application/json" hidden><button id="offline">↓ Offline altana</button><select id="radius" aria-label="Raggio"><option value="0.5">500 m</option><option value="1">1 km</option><option value="2">2 km</option><option value="5" selected>5 km</option></select><select id="zooms" aria-label="Zoom da scaricare"><option value="14">Zoom 14</option><option value="15" selected>Zoom 14–15</option><option value="16">Zoom 14–16</option></select><button id="cancel" hidden>Ferma</button><button id="export">Esporta</button><button id="import">Importa</button><input type="file" id="file" accept="application/json" hidden><span id="status" class="small">Nomi OSM da scaricare una volta per zona; punti privati sul dispositivo</span></div><div class="bottom"><button id="stand">＋ Altana</button><button id="park">＋ Parcheggio</button><button id="stop">Annulla</button></div><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
+const center=[45.38,13.82], key='hunting24-punti';let mode=null,points=[];try{points=JSON.parse(localStorage.getItem(key)||'[]')}catch{};const map=L.map('map',{zoomControl:false}).setView(center,15);L.control.zoom({position:'bottomright'}).addTo(map);let layer;
+function setLayer(y){if(layer)map.removeLayer(layer);layer=L.tileLayer.wms('https://geoportal.dgu.hr/services/inspire/orthophoto_'+y+'/wms',{layers:'OI.OrthoimageCoverage',format:'image/jpeg',transparent:false,version:'1.3.0',maxZoom:21,attribution:'Ortofoto © DGU Croazia · Località: archivio indicativo integrato'}).addTo(map);document.getElementById('status').textContent='DGU '+y.replace('_','/')+' · scegli altana e premi Offline altana';layer.on('tileerror',()=>{document.getElementById('status').textContent='Immagini non disponibili: provare l’altro anno (livello WMS da verificare)'})}setLayer('2024');document.getElementById('year').onchange=e=>setLayer(e.target.value);
+// Etichette ricavate da dati OpenStreetMap reali, mai da coordinate inventate.
+// I dati sono richiesti solo su azione esplicita, poi salvati localmente per l'offline.
+const PLACE_KEY='hunting24-osm-places-v1';
+let offlinePlaces=[];try{offlinePlaces=JSON.parse(localStorage.getItem(PLACE_KEY)||'[]')}catch{}
+const labelsLayer=L.layerGroup().addTo(map);let labelsVisible=true;
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function drawLabels(){
+ labelsLayer.clearLayers();if(!labelsVisible)return;
+ const z=map.getZoom(),bounds=map.getBounds(),occupied=new Set();
+ const sorted=offlinePlaces.slice().sort((a,b)=>({city:0,town:1,village:2,hamlet:3,isolated_dwelling:4,locality:5}[a.place]??6)-({city:0,town:1,village:2,hamlet:3,isolated_dwelling:4,locality:5}[b.place]??6));
+ for(const p of sorted){if(!bounds.pad(.15).contains([p.lat,p.lng]))continue;
+ const major=['city','town'].includes(p.place);
+ if(z<10||(!major&&z<12)||(['hamlet','locality','isolated_dwelling'].includes(p.place)&&z<14))continue;
+ const pix=map.latLngToContainerPoint([p.lat,p.lng]),gx=Math.round(pix.x/105),gy=Math.round(pix.y/48),cell=gx+':'+gy;
+ if(occupied.has(cell))continue;occupied.add(cell);
+ L.marker([p.lat,p.lng],{interactive:false,zIndexOffset:1500,icon:L.divIcon({className:'hunting-place',html:'<span class="'+(major?'big':'smallplace')+'">'+escapeHtml(p.name)+'</span>',iconSize:[0,0],iconAnchor:[0,0]})}).addTo(labelsLayer);
+ }
+}
+map.on('moveend zoomend',drawLabels);
+document.getElementById('names').onclick=()=>{labelsVisible=!labelsVisible;document.getElementById('names').textContent=labelsVisible?'◉ Località':'○ Località';drawLabels()};
+function mergePlaces(incoming){
+ const unique=new Map(offlinePlaces.map(p=>[p.id||p.name+'@'+p.lat.toFixed(4)+','+p.lng.toFixed(4),p]));
+ for(const p of incoming){if(!p||!Number.isFinite(+p.lat)||!Number.isFinite(+p.lng)||!p.name)continue;
+ const item={id:String(p.id||p.name+'@'+(+p.lat).toFixed(4)+','+(+p.lng).toFixed(4)),name:String(p.name),lat:+p.lat,lng:+p.lng,place:String(p.place||'locality')};unique.set(item.id,item)}
+ offlinePlaces=[...unique.values()];localStorage.setItem(PLACE_KEY,JSON.stringify(offlinePlaces));drawLabels();return offlinePlaces.length;
+}
+function bboxAround(lat,lng,km){const dy=km/111.32,dx=km/(111.32*Math.cos(lat*Math.PI/180));return [lat-dy,lng-dx,lat+dy,lng+dx]}
+function osmQuery(b){const [s,w,n,e]=b.map(x=>x.toFixed(6));return `[out:json][timeout:45];(node["place"~"^(city|town|village|hamlet|locality|isolated_dwelling)$"](${s},${w},${n},${e});way["place"~"^(city|town|village|hamlet|locality|isolated_dwelling)$"](${s},${w},${n},${e});relation["place"~"^(city|town|village|hamlet|locality|isolated_dwelling)$"](${s},${w},${n},${e}););out center;`}
+async function downloadNames(lat,lng,km){
+ if(!navigator.onLine)throw Error('Collegati a Internet per il primo download dei nomi.');
+ const query=osmQuery(bboxAround(lat,lng,km));const endpoints=['https://overpass.kumi.systems/api/interpreter','https://overpass-api.de/api/interpreter'];let last='';
+ for(const endpoint of endpoints){try{
+  const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),50000);
+  let resp;try{resp=await fetch(endpoint,{method:'POST',body:new URLSearchParams({data:query}),signal:ctl.signal,headers:{'Content-Type':'application/x-www-form-urlencoded'}})}finally{clearTimeout(timer)}
+  if(!resp.ok)throw Error('HTTP '+resp.status);
+  const data=await resp.json();if(!Array.isArray(data.elements))throw Error('risposta senza elementi');
+  const entries=data.elements.map(el=>({id:el.type+'/'+el.id,lat:el.lat??el.center?.lat,lng:el.lon??el.center?.lon,name:el.tags?.['name:it']||el.tags?.name||el.tags?.['name:hr']||el.tags?.['name:sl'],place:el.tags?.place})).filter(p=>p.name&&Number.isFinite(p.lat)&&Number.isFinite(p.lng));
+  const count=mergePlaces(entries);return {added:entries.length,total:count};
+ }catch(e){last=e.message}}
+ throw Error('Servizi OpenStreetMap non raggiungibili ('+last+'). Puoi importare un GeoJSON di località.');
+}
+document.getElementById('refreshNames').onclick=async()=>{
+ const c=map.getCenter();setStatus('Cerco località OSM vicino al centro della mappa…');
+ try{const r=await downloadNames(c.lat,c.lng,8);setStatus('Nomi reali OSM: '+r.added+' trovati nella zona, '+r.total+' conservati offline')}catch(e){setStatus(e.message)}
+};
+document.getElementById('importNames').onclick=()=>document.getElementById('namesFile').click();
+document.getElementById('namesFile').onchange=async e=>{try{
+ const d=JSON.parse(await e.target.files[0].text());let arr;
+ if(d.type==='FeatureCollection')arr=d.features.map(f=>({id:f.id||f.properties?.['@id'],name:f.properties?.['name:it']||f.properties?.name,place:f.properties?.place,lat:f.geometry?.type==='Point'?f.geometry.coordinates[1]:f.properties?.lat,lng:f.geometry?.type==='Point'?f.geometry.coordinates[0]:f.properties?.lon}));
+ else arr=Array.isArray(d)?d:d.places;
+ if(!Array.isArray(arr))throw Error('Formato non supportato');const n=mergePlaces(arr);setStatus(n+' località salvate offline');
+ }catch(e){setStatus('Importazione nomi: '+e.message)}e.target.value=''};
+setTimeout(()=>{drawLabels();setStatus(offlinePlaces.length+' località OSM memorizzate; premi “Scarica nomi zona” per aggiungerne')},700);
+const group=L.layerGroup().addTo(map);function render(){group.clearLayers();points.forEach((p,i)=>L.marker([p.lat,p.lng],{icon:L.divIcon({className:'',html:`<div style="background:${p.type==='Altana'?'#b34d2e':'#2463b6'};border:2px solid white;color:white;border-radius:18px;padding:6px;white-space:nowrap;box-shadow:0 1px 5px #0008">${p.type==='Altana'?'▲':'P'} ${p.name.replaceAll('<','&lt;')}</div>`,iconSize:[110,35],iconAnchor:[50,35]})}).bindPopup(`<b>${p.type}: ${p.name.replaceAll('<','&lt;')}</b><br>${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}<br>${p.type==='Altana'?`<button onclick="downloadStand(${i})">↓ Ortofoto</button> <button onclick="downloadStandNames(${i})">↓ Nomi zona</button>`:''} <button onclick="removePoint(${i})">Elimina</button>`).addTo(group))}window.removePoint=i=>{if(confirm('Eliminare il punto?')){points.splice(i,1);save()}};function save(){localStorage.setItem(key,JSON.stringify(points));render()}render();function select(m){mode=m;document.querySelectorAll('.bottom button').forEach(b=>b.classList.remove('active'));if(m)document.getElementById(m==='Altana'?'stand':'park').classList.add('active');document.getElementById('status').textContent=m?'Tocca la mappa per aggiungere '+m:'Punti salvati sul dispositivo'}document.getElementById('stand').onclick=()=>select('Altana');document.getElementById('park').onclick=()=>select('Parcheggio');document.getElementById('stop').onclick=()=>select(null);map.on('click',e=>{if(!mode)return;let name=prompt('Nome '+mode,mode+' '+(points.length+1));if(name){points.push({type:mode,name,lat:e.latlng.lat,lng:e.latlng.lng});save()}select(null)});document.getElementById('gps').onclick=()=>{if(!navigator.geolocation)return alert('GPS non disponibile');navigator.geolocation.getCurrentPosition(p=>{let a=[p.coords.latitude,p.coords.longitude];L.circleMarker(a,{radius:9,color:'#0b8aef',fillOpacity:.8}).addTo(map).bindPopup('La tua posizione').openPopup();map.setView(a,17)},e=>alert('GPS: '+e.message),{enableHighAccuracy:true,timeout:15000})};document.getElementById('export').onclick=()=>{let a=document.createElement('a'),url=URL.createObjectURL(new Blob([JSON.stringify({version:24,points},null,2)],{type:'application/json'}));a.href=url;a.download='hunting24-punti-privati.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),3000)};document.getElementById('import').onclick=()=>document.getElementById('file').click();document.getElementById('file').onchange=async e=>{try{let d=JSON.parse(await e.target.files[0].text()),arr=Array.isArray(d)?d:d.points;if(!Array.isArray(arr))throw Error();let clean=arr.filter(p=>Number.isFinite(+p.lat)&&Number.isFinite(+p.lng)&&['Altana','Parcheggio'].includes(p.type)).map(p=>({type:p.type,name:String(p.name||p.type),lat:+p.lat,lng:+p.lng}));if(confirm('Importare '+clean.length+' punti, sostituendo quelli attuali?')){points=clean;save()}}catch{alert('File JSON non valido')}};
+// Hunting 24: download per altana, con stima e conferma esplicita.
+const offlineBtn=document.getElementById('offline'), offlineStatus=document.getElementById('status');
+const cancelBtn=document.getElementById('cancel');let cancelled=false,downloading=false;
+let swReady=Promise.resolve(null);
+if('serviceWorker' in navigator)swReady=navigator.serviceWorker.register('./sw.js').then(()=>navigator.serviceWorker.ready).catch(()=>null);
+function tileAt(lat,lng,z){const n=2**z;return {x:Math.floor((lng+180)/360*n),y:Math.floor((1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2*n)}}
+function tileCenter(x,y,z){const n=2**z;return {lat:Math.atan(Math.sinh(Math.PI*(1-2*(y+.5)/n)))*180/Math.PI,lng:(x+.5)/n*360-180}}
+function distanceKm(a,b,c,d){const r=Math.PI/180,dl=(d-b)*r,da=(c-a)*r,q=Math.sin(da/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin(dl/2)**2;return 12742*Math.asin(Math.min(1,Math.sqrt(q)))}
+function tilesAround(lat,lng,radius,z){const m=111.32,dy=radius/m,dx=radius/(m*Math.max(.1,Math.cos(lat*Math.PI/180)));const nw=tileAt(Math.min(85,lat+dy),lng-dx,z),se=tileAt(Math.max(-85,lat-dy),lng+dx,z),out=[];for(let y=nw.y;y<=se.y;y++)for(let x=nw.x;x<=se.x;x++){const c=tileCenter(x,y,z);if(distanceKm(lat,lng,c.lat,c.lng)<=radius+(.5*40075*Math.cos(lat*Math.PI/180)/(2**z)))out.push({x,y,z})}return out}
+function allJobs(stand,radius,maxZoom){let jobs=[];for(let z=14;z<=maxZoom;z++)jobs.push(...tilesAround(stand.lat,stand.lng,radius,z));return jobs}
+function setStatus(t){offlineStatus.textContent=t}
+cancelBtn.onclick=()=>{cancelled=true;setStatus('Interruzione richiesta…')};
+window.downloadStandNames=async(i)=>{const p=points[i];if(!p)return;setStatus("Scarico località OSM attorno a "+p.name+"…");try{const r=await downloadNames(p.lat,p.lng,6);setStatus(r.added+" nomi trovati; "+r.total+" nomi conservati offline")}catch(e){setStatus(e.message)}};
+window.downloadStand=async(i)=>{
+ if(downloading)return;
+ const stand=points[i];if(!stand||stand.type!=='Altana')return;
+ if(!navigator.onLine)return alert('Per scaricare serve una connessione Internet.');
+ if(!('caches' in window)||!('serviceWorker' in navigator))return alert('Memoria offline non supportata.');
+ const radius=+document.getElementById('radius').value,maxZoom=+document.getElementById('zooms').value;
+ const jobs=allJobs(stand,radius,maxZoom),estimated=Math.round(jobs.length*45/1024);
+ if(jobs.length>12000)return alert('Troppi tasselli per una sola operazione. Riduci raggio o zoom.');
+ if(!confirm(`Altana: ${stand.name}\nRaggio: ${radius} km · Zoom 14–${maxZoom}\nCirca ${jobs.length} immagini (stima indicativa ${estimated} MB, può variare molto).\n\nDownload potenzialmente lungo. Verifica di essere autorizzato a memorizzare le ortofoto e usa Wi-Fi. Procedere?`))return;
+ const ready=await swReady;if(!ready)return alert('Service worker non pronto. Apri la pagina online e riprova.');
+ downloading=true;cancelled=false;cancelBtn.hidden=false;offlineBtn.disabled=true;
+ let ok=0,already=0,errors=0;const cache=await caches.open('hunting24-ortofoto-v1');
+ try{
+  for(let k=0;k<jobs.length;k++){
+   if(cancelled)break;
+   const url=layer.getTileUrl(jobs[k]);const req=new Request(url,{mode:'no-cors',credentials:'omit'});
+   try{if(await cache.match(req)){already++}else{
+    const response=await fetch(req);
+    if(response.ok||response.type==='opaque'){await cache.put(req,response.clone());ok++}else errors++;
+   }}catch(e){errors++}
+   if(k%5===0||k===jobs.length-1)setStatus(`${stand.name}: ${k+1}/${jobs.length} · nuovi ${ok}, già salvati ${already}, errori ${errors}`);
+   if(k%30===0)await new Promise(r=>setTimeout(r,300));
+  }
+  setStatus(`${cancelled?'Interrotto':'Terminato'} · ${ok} nuovi, ${already} già presenti, ${errors} errori`);
+  alert(`${cancelled?'Interrotto':'Richieste di download terminate'}: ${ok} risposte memorizzate (contenuto da verificare offline), ${already} già presenti, ${errors} errori. Per i nomi premi “Scarica nomi zona” mentre sei online. Prova in modalità aereo.`);
+ }catch(e){setStatus('Errore: '+e.message);alert('Download interrotto: '+e.message)}
+ finally{downloading=false;cancelBtn.hidden=true;offlineBtn.disabled=false;}
+};
+offlineBtn.onclick=()=>{const stands=points.map((p,i)=>({...p,i})).filter(p=>p.type==='Altana');if(!stands.length)return alert('Prima aggiungi almeno una altana sulla mappa.');const names=stands.map((p,j)=>`${j+1}. ${p.name}`).join('\n');const n=prompt('Quale altana vuoi salvare offline?\n'+names+'\nScrivi il numero:','1');if(n===null)return;const selected=stands[Number(n)-1];if(!selected)return alert('Numero non valido');downloadStand(selected.i)};
+</script></body></html>
