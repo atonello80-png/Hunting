@@ -1,0 +1,12 @@
+HUNTING 37 – SIMULAZIONE NAVIGAZIONE OFFLINE
+
+Crea cartella prova37 su GitHub e carica index.html, sw.js, manifest.webmanifest, localita-istria.js, confine-vepar.js, strade-vepar.js.
+
+1. Aggiungi altana e parcheggio di prova nella zona VEPAR.
+2. Apri ☰ Altane e associa il parcheggio.
+3. Premi 🧪 Simula percorso offline.
+4. Tocca sulla mappa una strada nella riserva per impostare la partenza simulata.
+5. Il percorso blu usa solo la rete stradale incorporata; nessun Google Maps.
+6. Premi ■ Fine navigazione per terminare.
+
+La simulazione NON usa il GPS. La navigazione reale usa il GPS ed è disponibile solo nella zona della rete stradale incorporata. Se il grafo non collega le strade, viene mostrato un errore.
