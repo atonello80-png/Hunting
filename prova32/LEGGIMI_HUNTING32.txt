@@ -1,0 +1,1 @@
+Hunting 32: recupera il confine già salvato sullo stesso sito e permette di esportarlo con il pulsante Esporta confine. Invia il file confine-vepar-oprtalj.geojson per incorporare il perimetro direttamente nel pacchetto. Nessuna coordinata delle altane inclusa.
