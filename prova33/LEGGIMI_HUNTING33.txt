@@ -1,0 +1,5 @@
+Hunting 33: confine ufficiale XVIII/107 Oprtalj incorporato in confine-vepar.js, disponibile offline.
+Scarica l’intera riserva a zoom 14-16 e gli 800 m attorno a tutte le altane a zoom 17-19.
+Carica TUTTI i 5 file web nella cartella prova33 su GitHub Pages.
+Il download può essere molto lungo; prova prima su iPhone con Wi-Fi.
+Il perimetro non sostituisce la verifica delle autorizzazioni venatorie.
