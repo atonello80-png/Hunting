@@ -1,0 +1,5 @@
+HUNTING 38 — correzione aggancio alle strade.
+Il percorso ora si aggancia ai segmenti stradali anziché soltanto ai nodi.
+ATTENZIONE: la rete OSM inclusa resta quella di Hunting 37; se mancano strade o collegamenti, la navigazione non può ricostruirli.
+Per la prova: crea prova38 su GitHub, carica i sei file dell’app (escluso questo LEGGIMI), apri online una volta e usa la simulazione dalla lista altane.
+Conserva prova33 come versione stabile delle ortofoto.
