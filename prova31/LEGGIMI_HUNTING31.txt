@@ -1,0 +1,9 @@
+Hunting 31 - correzione richiesta confine VEPAR
+
+Corretto endpoint ArcGIS: lovstvo/lovista/MapServer/0
+Corretto campo: LOVISTE
+Il perimetro NON e' incluso nello ZIP: serve il download dal servizio oppure l'importazione di un GeoJSON verificato.
+Se Safari blocca la richiesta, il pulsante potrebbe ancora non funzionare.
+Non avviare download della riserva senza aver controllato il confine.
+Copertura prevista: riserva zoom 14-16; 800 m attorno a ogni altana zoom 17-19.
+Non cancellare le versioni precedenti.
