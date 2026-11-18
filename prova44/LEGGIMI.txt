@@ -1,0 +1,4 @@
+Hunting 44 – Icona altana e zoom offline con recupero tasselli a risoluzione inferiore.
+Carica index.html, sw.js, manifest.webmanifest, localita-istria.js, confine-vepar.js e i 3 PNG nella cartella prova44 su GitHub Pages.
+Apri prima online, aggiungi nuovamente alla Home, poi verifica offline. Conserva prova43.
+Le immagini possono apparire meno nitide dove manca lo zoom nativo.
