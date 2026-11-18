@@ -1,0 +1,1 @@
+window.HUNTING_LOCALITA=[];
