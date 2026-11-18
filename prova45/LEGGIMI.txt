@@ -1,0 +1,4 @@
+Hunting 45: ripristino visualizzazione ortofoto di Hunting 43 + icona altana.
+Carica gli 8 file web in prova45 (non LEGGIMI). Apri online prima di usare offline.
+Le ortofoto ai livelli non scaricati possono ancora mancare: questa versione NON include il fallback sperimentale di Hunting 44.
+Non cancellare prova43 né i dati dell’app.

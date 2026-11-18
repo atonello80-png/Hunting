@@ -1,0 +1,240 @@
+<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#183e31"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-180.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Hunting"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><title>Hunting 45 – GPS e punti associati</title><style>html,body{margin:0;height:100%;font:15px system-ui}#map{height:100dvh;background:#dce4dd}.top{position:absolute;z-index:1000;top:10px;left:10px;right:10px;background:#fff;padding:9px;border-radius:12px;box-shadow:0 2px 12px #0003;display:flex;gap:6px;flex-wrap:wrap;align-items:center}.bottom{position:absolute;z-index:1000;bottom:20px;left:10px;right:10px;display:flex;gap:8px}.bottom button{flex:1;padding:15px 4px;font-weight:700}.bottom #listStands{background:#205d45;color:white;border:1px solid #174c38;border-radius:9px}.hunting-panel{position:absolute;z-index:1200;bottom:90px;right:10px;left:10px;max-height:65dvh;overflow:auto;background:white;border-radius:14px;padding:14px;box-shadow:0 4px 25px #0006}.hunting-panel[hidden]{display:none}.hunting-item{padding:10px 0;border-bottom:1px solid #ddd}.hunting-item button{margin:4px 5px 0 0;padding:8px;border-radius:7px;border:1px solid #bbb;background:#f8f8f8}.hunting-panel-header{display:flex;justify-content:space-between;align-items:center}.top button,.top select{padding:8px;border-radius:7px;border:1px solid #bbb;background:white}button.active{background:#216b4c;color:white}.small{font-size:11px;color:#444;flex-basis:100%}.leaflet-control-attribution{font-size:10px!important}.hunting-place{pointer-events:none!important}.hunting-place span{display:inline-block;transform:translate(-50%,-50%);white-space:nowrap;color:#17272a;font-weight:700;text-shadow:-1px -1px 2px #fff,1px 1px 2px #fff,1px -1px 2px #fff,-1px 1px 2px #fff,0 0 4px #fff}.hunting-place .big{font-size:17px}.hunting-place .smallplace{font-size:14px;font-weight:700}
+.top[hidden],.bottom[hidden]{display:none!important}
+.floating-menu,.floating-points,.floating-stands{position:absolute;z-index:1100;border:1px solid #b9c8be;border-radius:11px;background:#fff;color:#174632;font-weight:750;box-shadow:0 2px 10px #0004;padding:10px 12px;font-size:14px}
+.floating-menu{top:calc(10px + env(safe-area-inset-top));left:10px}
+.floating-points{bottom:calc(18px + env(safe-area-inset-bottom));left:10px}
+.floating-stands{bottom:calc(18px + env(safe-area-inset-bottom));right:65px}
+.top{top:calc(58px + env(safe-area-inset-top));max-height:55dvh;overflow:auto;box-sizing:border-box}
+.bottom{bottom:calc(70px + env(safe-area-inset-bottom));flex-wrap:wrap;background:#fff;padding:7px;border-radius:11px;box-shadow:0 2px 12px #0004}
+.bottom button{min-width:120px}.hunting-panel{bottom:calc(78px + env(safe-area-inset-bottom));max-height:65dvh}
+@media(max-width:380px){.floating-stands{right:56px}.floating-menu,.floating-points,.floating-stands{padding:9px;font-size:13px}}
+</style></head><body><div id="map"></div><button id="toggleMenu" class="floating-menu" aria-expanded="false">☰ Menu</button><div class="top" id="topTools" hidden><b>Hunting 45</b><select id="year"><option value="2024">DGU 2024</option><option value="2025_2026">DGU 2025/26</option></select><button id="gps">◎ GPS: attiva</button><button id="names">◉ Località</button><button id="boundary">Confine VEPAR</button><button id="exportBoundary">Esporta confine</button><button id="offline">↓ Offline tutta la riserva + altane</button><select id="radius" aria-label="Raggio" hidden><option value="0.5">500 m</option><option value="1">1 km</option><option value="2" selected>2 km (massimo)</option></select><select id="zooms" aria-label="Zoom da scaricare" hidden><option value="14">Zoom 14</option><option value="15">Zoom 14–15</option><option value="16">Zoom 14–16</option><option value="17">Zoom 14–17</option><option value="18" selected>Zoom 14–18 (dettaglio)</option><option value="19">Zoom 14–19 (massimo)</option></select><button id="cancel" hidden>Ferma</button><button id="export">Esporta</button><button id="import">Importa</button><input type="file" id="file" accept="application/json" hidden><input type="file" id="boundaryFile" accept=".geojson,.json,application/json" hidden><span id="status" class="small">Nomi reali OSM già inclusi e disponibili offline · punti privati</span></div><button id="togglePoints" class="floating-points" aria-expanded="false">＋ Punti</button><button id="quickStands" class="floating-stands">☰ Altane</button><div class="bottom" id="pointTools" hidden><button id="stand">＋ Altana</button><button id="park">＋ Parcheggio</button><button id="stop">Annulla</button><button id="listStands">☰ Altane</button></div><section id="standPanel" class="hunting-panel" hidden aria-label="Elenco altane"><div class="hunting-panel-header"><strong>Le mie altane</strong><button id="closeStands">Chiudi ✕</button></div><p style="font-size:12px">Ogni nuova altana richiede subito il suo parcheggio. Usa «Mostra parcheggio» e il puntino GPS blu per orientarti sulle ortofoto offline. Non viene calcolato un itinerario stradale.</p><div id="standItems"></div></section><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
+// Pannelli chiusi all'apertura, accessibili con pulsanti flottanti.
+const topTools=document.getElementById('topTools'),pointTools=document.getElementById('pointTools');
+const toggleMenu=document.getElementById('toggleMenu'),togglePoints=document.getElementById('togglePoints');
+function showToolbar(panel,button,open){panel.hidden=!open;button.setAttribute('aria-expanded',String(open));button.textContent=button.id==='toggleMenu'?(open?'✕ Chiudi menu':'☰ Menu'):(open?'✕ Chiudi punti':'＋ Punti');}
+toggleMenu.onclick=()=>showToolbar(topTools,toggleMenu,topTools.hidden);
+togglePoints.onclick=()=>showToolbar(pointTools,togglePoints,pointTools.hidden);
+document.getElementById('quickStands').onclick=()=>document.getElementById('listStands').click();
+for(const id of ['stand','park'])document.getElementById(id).addEventListener('click',()=>showToolbar(pointTools,togglePoints,false));
+</script><script src="./localita-istria.js"></script><script src="./confine-vepar.js"></script><script>
+const center=[45.38,13.82], key='hunting25-punti';let mode=null,points=[];try{points=JSON.parse(localStorage.getItem(key)||'[]')}catch{};const map=L.map('map',{zoomControl:false}).setView(center,15);L.control.zoom({position:'bottomright'}).addTo(map);let layer;
+// Un solo generatore URL per mappa e download: evita discrepanze nella cache.
+const nativeZoomKey='hunting30-zoom-nativo';
+let offlineNativeZoom=Math.min(19,Math.max(14,Number(localStorage.getItem(nativeZoomKey)||localStorage.getItem('hunting28-zoom-nativo')||15)));
+const OfflineWMS=L.TileLayer.WMS.extend({getTileUrl:function(coords){return wmsTileUrl(coords,this)}});
+function setLayer(y){if(layer)map.removeLayer(layer);layer=new OfflineWMS('https://geoportal.dgu.hr/services/inspire/orthophoto_'+y+'/wms',{layers:'OI.OrthoimageCoverage',format:'image/jpeg',transparent:false,version:'1.3.0',maxZoom:21,maxNativeZoom:offlineNativeZoom,attribution:'Ortofoto © DGU Croazia · Località: © OpenStreetMap contributors (ODbL)'});layer.addTo(map);document.getElementById('status').textContent='DGU '+y.replace('_','/')+' · scegli altana e premi Offline altana';layer.on('tileerror',()=>{document.getElementById('status').textContent='Immagini non disponibili: provare l’altro anno (livello WMS da verificare)'})}setLayer('2024');document.getElementById('year').onchange=e=>setLayer(e.target.value);
+// Etichette ricavate da dati OpenStreetMap reali, mai da coordinate inventate.
+// I dati sono richiesti solo su azione esplicita, poi salvati localmente per l'offline.
+const labelsLayer=L.layerGroup().addTo(map);let labelsVisible=true;
+const placeRank={city:0,town:1,village:2,hamlet:3,locality:4,isolated_dwelling:5,neighbourhood:6,suburb:7,quarter:8};
+const offlinePlaces=(window.HUNTING_LOCALITA||[]).map(([lat,lng,name,it,place,id])=>({lat,lng,name:it||name,place,id})).sort((a,b)=>(placeRank[a.place]??9)-(placeRank[b.place]??9));
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function drawLabels(){
+ labelsLayer.clearLayers();if(!labelsVisible)return;
+ const z=map.getZoom(),bounds=map.getBounds().pad(.08),occupied=[];
+ for(const p of offlinePlaces){if(!bounds.contains([p.lat,p.lng]))continue;
+ const major=['city','town'].includes(p.place);
+ if(z<10||(!major&&z<11)||(['hamlet','locality','isolated_dwelling'].includes(p.place)&&z<13))continue;
+ const pix=map.latLngToContainerPoint([p.lat,p.lng]);
+ const spacing=z>=16?55:z>=14?80:125;
+ if(occupied.some(q=>Math.abs(q.x-pix.x)<spacing&&Math.abs(q.y-pix.y)<24))continue;
+ occupied.push(pix);
+ L.marker([p.lat,p.lng],{interactive:false,zIndexOffset:1500,icon:L.divIcon({className:'hunting-place',html:'<span class="'+(major?'big':'smallplace')+'">'+escapeHtml(p.name)+'</span>',iconSize:[0,0],iconAnchor:[0,0]})}).addTo(labelsLayer);
+ }
+}
+map.on('moveend zoomend',drawLabels);
+document.getElementById('names').onclick=()=>{labelsVisible=!labelsVisible;document.getElementById('names').textContent=labelsVisible?'◉ Località':'○ Località';drawLabels()};
+setTimeout(()=>{drawLabels();setStatus(offlinePlaces.length+' località reali OSM incluse nell’app, senza richieste a server esterni')},700);
+const group=L.layerGroup().addTo(map);function render(){group.clearLayers();points.forEach((p,i)=>L.marker([p.lat,p.lng],{icon:L.divIcon({className:'',html:`<div style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:${p.type==='Altana'?'#b34d2e':'#2463b6'};border:2px solid white;color:white;border-radius:50%;font-size:${p.type==='Altana'?'21px':'21px'};font-weight:800;box-sizing:border-box;box-shadow:0 1px 5px #0008">${p.type==='Altana'?'🪜':'P'}</div>`,iconSize:[34,34],iconAnchor:[17,17]})}).bindPopup(`<b>${p.type}: ${p.name.replaceAll('<','&lt;')}</b><br>${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}<br>${p.type==='Altana'?`<button onclick="downloadStand(${i})">↓ Ortofoto</button>`:''} <button onclick="removePoint(${i})">Elimina</button>`).addTo(group))}window.removePoint=i=>{const p=points[i];if(!p)return;const linked=p.type==='Parcheggio'?points.filter(q=>q.type==='Altana'&&q.parkingId===p.id):[];const msg=linked.length?'Questo parcheggio è associato a '+linked.length+' altana/e. Eliminare anche le altane collegate?':'Eliminare il punto?';if(confirm(msg)){points=points.filter(q=>q!==p&&!linked.includes(q));save()}};function save(){localStorage.setItem(key,JSON.stringify(points));render();if(typeof showStandList==='function'&&!document.getElementById('standPanel').hidden)showStandList()}render();function select(m){if(pendingStand){pendingStand=null;}mode=m;document.querySelectorAll('.bottom button').forEach(b=>b.classList.remove('active'));if(m)document.getElementById(m==='Altana'?'stand':'park').classList.add('active');setStatus(m==='Altana'?'Tocca la mappa per l’altana; poi dovrai indicare obbligatoriamente il parcheggio.':m?'Tocca la mappa per aggiungere '+m:'Punti salvati sul dispositivo')}document.getElementById('stand').onclick=()=>select('Altana');document.getElementById('park').onclick=()=>select('Parcheggio');document.getElementById('stop').onclick=()=>select(null);
+// Hunting 36: collegamento persistente altana-parcheggio; nessuna rotta rettilinea spacciata per strada.
+const standPanel=document.getElementById('standPanel');
+const standItems=document.getElementById('standItems');
+function safeLabel(t){return String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function ensurePointIds(){let changed=false;for(const p of points){if(!p.id){p.id='p'+Date.now().toString(36)+Math.random().toString(36).slice(2,10);changed=true;}}if(changed)localStorage.setItem(key,JSON.stringify(points));}
+ensurePointIds();
+function showStandList(){
+ ensurePointIds();standItems.replaceChildren();
+ const stands=points.filter(p=>p.type==='Altana'),parks=points.filter(p=>p.type==='Parcheggio');
+ if(!stands.length){standItems.textContent='Nessuna altana salvata. Usa «＋ Altana» per aggiungerne una.';return;}
+ for(const p of stands){
+  const row=document.createElement('div');row.className='hunting-item';
+  const title=document.createElement('div');title.innerHTML='<strong>'+safeLabel(p.name)+'</strong>';row.append(title);
+  const selector=document.createElement('select');selector.setAttribute('aria-label','Parcheggio per '+p.name);selector.style.cssText='display:block;width:100%;max-width:420px;padding:9px;margin-top:7px';
+  const empty=document.createElement('option');empty.value='';empty.textContent='— Seleziona il parcheggio associato —';selector.append(empty);
+  for(const park of parks){const option=document.createElement('option');option.value=park.id;option.textContent=park.name;selector.append(option)}
+  selector.value=parks.some(q=>q.id===p.parkingId)?p.parkingId:'';
+  selector.onchange=()=>{p.parkingId=selector.value||null;save();showStandList()};row.append(selector);
+  const locate=document.createElement('button');locate.textContent='📍 Mostra altana';locate.onclick=()=>{map.setView([p.lat,p.lng],18);standPanel.hidden=true};row.append(locate);
+  const showPark=document.createElement('button');showPark.textContent='🅿 Mostra parcheggio';showPark.onclick=()=>{
+   const park=points.find(q=>q.type==='Parcheggio'&&q.id===p.parkingId);
+   if(!park)return alert('Associa prima un parcheggio a '+p.name+'.');
+   standPanel.hidden=true;map.setView([park.lat,park.lng],18);
+   setStatus('Parcheggio «'+park.name+'» sulla mappa. Attiva GPS per vedere la tua posizione (nessun percorso calcolato).');
+  };row.append(showPark);
+  standItems.append(row);
+ }
+}
+document.getElementById('listStands').onclick=()=>{showStandList();standPanel.hidden=!standPanel.hidden};
+document.getElementById('closeStands').onclick=()=>{standPanel.hidden=true};
+// Creazione obbligatoria in due tap: altana, poi relativo parcheggio.
+let pendingStand=null;
+map.on('click',e=>{
+ if(mode==='Altana'){
+  const name=prompt('Nome altana','Altana '+(points.filter(p=>p.type==='Altana').length+1));
+  if(!name||!name.trim())return;
+  pendingStand={type:'Altana',name:name.trim(),lat:e.latlng.lat,lng:e.latlng.lng,id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,10)};
+  mode='ParcheggioObbligatorio';
+  setStatus('Altana «'+pendingStand.name+'» pronta. Ora TOCCA LA MAPPA sul parcheggio associato. Premi Annulla per non salvare.');
+  alert('Ora tocca sulla mappa il PARCHEGGIO di «'+pendingStand.name+'». I due punti verranno salvati insieme.');
+  return;
+ }
+ if(mode==='ParcheggioObbligatorio'){
+  const name=prompt('Nome parcheggio associato a '+pendingStand.name,'Parcheggio '+pendingStand.name);
+  if(!name||!name.trim())return;
+  const park={type:'Parcheggio',name:name.trim(),lat:e.latlng.lat,lng:e.latlng.lng,id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,10)};
+  pendingStand.parkingId=park.id;
+  points.push(pendingStand,park);const newStandIndex=points.length-2;pendingStand=null;save();select(null);
+  setStatus('Altana e parcheggio associato salvati insieme.');
+  // La conferma del download viene proposta soltanto dopo il salvataggio dei due punti.
+  if(navigator.onLine){setTimeout(()=>downloadStand(newStandIndex),100)}
+  else {setStatus('Altana salvata. Senza Internet: scarica le ortofoto in seguito toccando la sua icona 🪜.')}
+  return;
+ }
+ if(mode==='Parcheggio'){
+  const name=prompt('Nome parcheggio','Parcheggio '+(points.length+1));
+  if(name&&name.trim()){points.push({type:'Parcheggio',name:name.trim(),lat:e.latlng.lat,lng:e.latlng.lng,id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,10)});save()}
+  select(null);
+ }
+});
+let gpsWatchId=null,gpsDot=null,gpsAccuracy=null,gpsFirstFix=false;
+const gpsButton=document.getElementById('gps');
+function stopGps(){
+ if(gpsWatchId!==null)navigator.geolocation.clearWatch(gpsWatchId);
+ gpsWatchId=null;gpsFirstFix=false;
+ if(gpsDot){map.removeLayer(gpsDot);gpsDot=null;}
+ if(gpsAccuracy){map.removeLayer(gpsAccuracy);gpsAccuracy=null;}
+ gpsButton.textContent='◎ GPS: attiva';gpsButton.classList.remove('active');
+ setStatus('GPS disattivato.');
+}
+gpsButton.onclick=()=>{
+ if(gpsWatchId!==null){stopGps();return;}
+ if(!navigator.geolocation)return alert('GPS non disponibile su questo dispositivo.');
+ gpsButton.textContent='◎ GPS: ricerca…';gpsButton.classList.add('active');
+ setStatus('Ricerca posizione GPS… consenti l’accesso alla posizione quando richiesto.');
+ gpsWatchId=navigator.geolocation.watchPosition(p=>{
+  const ll=[p.coords.latitude,p.coords.longitude];
+  const acc=Math.max(0,p.coords.accuracy||0);
+  if(!gpsDot){gpsDot=L.circleMarker(ll,{radius:9,color:'#fff',weight:3,fillColor:'#087ef5',fillOpacity:1,interactive:false}).addTo(map);}
+  else gpsDot.setLatLng(ll);
+  if(!gpsAccuracy){gpsAccuracy=L.circle(ll,{radius:acc,color:'#087ef5',weight:1,fillColor:'#087ef5',fillOpacity:.10,interactive:false}).addTo(map);}
+  else gpsAccuracy.setLatLng(ll).setRadius(acc);
+  if(!gpsFirstFix){map.setView(ll,17);gpsFirstFix=true;}
+  gpsButton.textContent='● GPS: attivo';
+  setStatus('GPS attivo · precisione circa ±'+Math.round(acc)+' m. Puntino blu = posizione attuale. Tocca GPS per fermare.');
+ },e=>{
+  gpsButton.textContent='◎ GPS: attiva';gpsButton.classList.remove('active');
+  if(gpsWatchId!==null)navigator.geolocation.clearWatch(gpsWatchId);
+  gpsWatchId=null;
+  setStatus('GPS: '+e.message+' · controlla i permessi Posizione di Safari.');
+ },{enableHighAccuracy:true,maximumAge:2000,timeout:25000});
+};
+document.getElementById('export').onclick=()=>{let a=document.createElement('a'),url=URL.createObjectURL(new Blob([JSON.stringify({version:25,points},null,2)],{type:'application/json'}));a.href=url;a.download='hunting25-punti-privati.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),3000)};document.getElementById('import').onclick=()=>document.getElementById('file').click();document.getElementById('file').onchange=async e=>{try{let d=JSON.parse(await e.target.files[0].text()),arr=Array.isArray(d)?d:d.points;if(!Array.isArray(arr))throw Error();let clean=arr.filter(p=>Number.isFinite(+p.lat)&&Number.isFinite(+p.lng)&&['Altana','Parcheggio'].includes(p.type)).map(p=>({type:p.type,name:String(p.name||p.type),lat:+p.lat,lng:+p.lng,id:typeof p.id==='string'?p.id:undefined,parkingId:typeof p.parkingId==='string'?p.parkingId:null}));if(confirm('Importare '+clean.length+' punti, sostituendo quelli attuali?')){points=clean;save()}}catch{alert('File JSON non valido')}};
+
+const offlineBtn=document.getElementById('offline'), offlineStatus=document.getElementById('status');
+const cancelBtn=document.getElementById('cancel');let cancelled=false,downloading=false;
+let swReady=Promise.resolve(null);
+if('serviceWorker' in navigator)swReady=navigator.serviceWorker.register('./sw.js').then(()=>navigator.serviceWorker.ready).catch(()=>null);
+function tileAt(lat,lng,z){const n=2**z;return {x:Math.floor((lng+180)/360*n),y:Math.floor((1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2*n)}}
+function tileCenter(x,y,z){const n=2**z;return {lat:Math.atan(Math.sinh(Math.PI*(1-2*(y+.5)/n)))*180/Math.PI,lng:(x+.5)/n*360-180}}
+function distanceKm(a,b,c,d){const r=Math.PI/180,dl=(d-b)*r,da=(c-a)*r,q=Math.sin(da/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin(dl/2)**2;return 12742*Math.asin(Math.min(1,Math.sqrt(q)))}
+function tilesAround(lat,lng,radius,z){const m=111.32,dy=radius/m,dx=radius/(m*Math.max(.1,Math.cos(lat*Math.PI/180)));const nw=tileAt(Math.min(85,lat+dy),lng-dx,z),se=tileAt(Math.max(-85,lat-dy),lng+dx,z),out=[];for(let y=nw.y;y<=se.y;y++)for(let x=nw.x;x<=se.x;x++){const c=tileCenter(x,y,z);if(distanceKm(lat,lng,c.lat,c.lng)<=radius+(.5*40075*Math.cos(lat*Math.PI/180)/(2**z)))out.push({x,y,z})}return out}
+// URL WMS calcolato direttamente, senza chiamare getTileUrl o scaleBy di Leaflet.
+// BBOX in EPSG:3857, identico al formato usato da L.TileLayer.WMS.
+function wmsTileUrl(tile,wmsLayer=layer){
+ const n=2**tile.z,extent=20037508.342789244,step=2*extent/n;
+ const west=-extent+tile.x*step,east=west+step;
+ const north=extent-tile.y*step,south=north-step;
+ const bbox=[west,south,east,north].join(',');
+ const base=wmsLayer._url;
+ const query=L.Util.getParamString(wmsLayer.wmsParams,base,wmsLayer.options.uppercase);
+ return base+query+(wmsLayer.options.uppercase?'&BBOX=':'&bbox=')+bbox;
+}
+function allJobs(stand,radius,maxZoom){let jobs=[];for(let z=14;z<=maxZoom;z++)jobs.push(...tilesAround(stand.lat,stand.lng,radius,z));return jobs}
+function setStatus(t){offlineStatus.textContent=t}
+cancelBtn.onclick=()=>{cancelled=true;setStatus('Interruzione richiesta…')};
+window.downloadStand=async(i)=>{
+ if(downloading)return;
+ const stand=points[i];if(!stand||stand.type!=='Altana')return;
+ if(!navigator.onLine)return alert('Per scaricare serve una connessione Internet.');
+ if(!('caches' in window)||!('serviceWorker' in navigator))return alert('Memoria offline non supportata.');
+ const radius=Math.min(2,+document.getElementById('radius').value),maxZoom=+document.getElementById('zooms').value;
+ const jobs=allJobs(stand,radius,maxZoom),estimated=Math.round(jobs.length*45/1024);
+ if(jobs.length>25000)return alert('Troppi tasselli per una sola operazione ('+jobs.length+'). Riduci raggio o zoom.');
+ if(!confirm(`Altana: ${stand.name}\nRaggio massimo: ${radius} km · Zoom 14–${maxZoom}\nCirca ${jobs.length} immagini (stima indicativa ${estimated} MB, può variare molto).\nLe immagini già in cache non saranno riscaricate.\nSafari potrebbe imporre limiti di memoria.\n\nDownload potenzialmente lungo. Verifica di essere autorizzato a memorizzare le ortofoto e usa Wi-Fi. Procedere?`))return;
+ const ready=await swReady;if(!ready)return alert('Service worker non pronto. Apri la pagina online e riprova.');
+ downloading=true;cancelled=false;cancelBtn.hidden=false;offlineBtn.disabled=true;
+ let ok=0,already=0,errors=0;const cache=await caches.open('hunting27-ortofoto-v1');
+ try{
+  for(let k=0;k<jobs.length;k++){
+   if(cancelled)break;
+   const url=layer.getTileUrl(jobs[k]);const req=new Request(url,{mode:'no-cors',credentials:'omit'});
+   try{if(await cache.match(url)){already++}else{
+    const response=await fetch(req);
+    if(response.ok||response.type==='opaque'){await cache.put(url,response.clone());ok++}else errors++;
+   }}catch(e){errors++}
+   if(k%5===0||k===jobs.length-1)setStatus(`${stand.name}: ${k+1}/${jobs.length} · nuovi ${ok}, già salvati ${already}, errori ${errors}`);
+   if(k%30===0)await new Promise(r=>setTimeout(r,350));
+  }
+   if(!cancelled&&errors===0&&ok+already===jobs.length&&maxZoom>offlineNativeZoom){
+    offlineNativeZoom=maxZoom;localStorage.setItem(nativeZoomKey,String(offlineNativeZoom));
+    layer.options.maxNativeZoom=offlineNativeZoom;layer.redraw();
+   }
+   setStatus(`${cancelled?'Interrotto':'Terminato'} · ${ok} nuovi, ${already} già presenti, ${errors} errori`);
+  alert(`${cancelled?'Interrotto':'Richieste di download terminate'}: ${ok} risposte memorizzate (contenuto da verificare offline), ${already} già presenti, ${errors} errori. I nomi sono già inclusi offline. Fino allo zoom ${offlineNativeZoom} puoi vedere le immagini native dove scaricate. Altrove o oltre tale zoom le foto possono risultare ingrandite o mancanti offline.`);
+ }catch(e){setStatus('Errore: '+e.message);alert('Download interrotto: '+e.message)}
+ finally{downloading=false;cancelBtn.hidden=true;offlineBtn.disabled=false;}
+};
+
+// Hunting 30: perimetro reale necessario; nessun confine inventato.
+const boundaryKey='hunting30-vepar-confine-v1';let boundary=null;let boundaryLayer=null;
+const officialQuery='https://ags.ribarstvo.hr/arcgis/rest/services/lovstvo/lovista/MapServer/0/query?where='+encodeURIComponent("LOVISTE LIKE '%Oprtalj%'")+'&outFields=*&returnGeometry=true&outSR=4326&f=geojson';
+function geoFeatures(data){return data?.type==='FeatureCollection'?data.features:data?.type==='Feature'?[data]:data?.type==='Polygon'||data?.type==='MultiPolygon'?[{type:'Feature',geometry:data,properties:{}}]:[]}
+function validBoundary(data){const f=geoFeatures(data).filter(x=>['Polygon','MultiPolygon'].includes(x?.geometry?.type));if(f.length!==1)throw Error('Atteso un solo poligono Oprtalj: trovati '+f.length);const a=f[0].properties||{};const name=String(a['LOVISTE']||a['Lovište']||a['Loviste']||a.name||'');if(name&&!/oprtalj/i.test(name))throw Error('Il poligono non è Oprtalj');return f[0]}
+function showBoundary(f){if(boundaryLayer)map.removeLayer(boundaryLayer);boundary=f;boundaryLayer=L.geoJSON(f,{style:{color:'#f08825',weight:3,fillOpacity:.05}}).addTo(map);map.fitBounds(boundaryLayer.getBounds().pad(.07));setStatus('Confine Oprtalj caricato · pronto per il download offline')}
+try{showBoundary(validBoundary(window.HUNTING_VEPAR_CONFINE));localStorage.setItem(boundaryKey,JSON.stringify(boundary))}catch(e){console.error('Confine VEPAR incluso non valido:',e);setStatus('Errore nel confine VEPAR incluso')}
+document.getElementById('boundary').onclick=()=>{if(boundaryLayer){map.fitBounds(boundaryLayer.getBounds().pad(.07));setStatus('Confine VEPAR disponibile offline · XVIII/107 Oprtalj')}else alert('Confine offline non disponibile: controlla confine-vepar.js')};
+document.getElementById('exportBoundary').onclick=()=>{
+ if(!boundary)return alert('Premi prima «Confine VEPAR» per acquisire il perimetro.');
+ const blob=new Blob([JSON.stringify({type:'FeatureCollection',features:[boundary]},null,2)],{type:'application/geo+json'});
+ const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='confine-vepar-oprtalj.geojson';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+ setStatus('Confine esportato: salva il file e invialo in chat per incorporarlo in Hunting.');
+};
+document.getElementById('boundaryFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const obj=JSON.parse(await f.text());const geom=validBoundary(obj);showBoundary(geom);localStorage.setItem(boundaryKey,JSON.stringify(geom))}catch(err){alert('GeoJSON non valido: '+err.message)}e.target.value=''};
+function inRing(lon,lat,ring){let inside=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const a=ring[i],b=ring[j];if(((a[1]>lat)!==(b[1]>lat))&&(lon<(b[0]-a[0])*(lat-a[1])/(b[1]-a[1])+a[0]))inside=!inside}return inside}
+function inPolygon(lon,lat,poly){return inRing(lon,lat,poly[0])&&!poly.slice(1).some(h=>inRing(lon,lat,h))}
+function inBoundary(lon,lat){const g=boundary.geometry;return(g.type==='Polygon'?[g.coordinates]:g.coordinates).some(p=>inPolygon(lon,lat,p))}
+function boundaryTiles(z){const b=boundaryLayer.getBounds(),nw=tileAt(b.getNorth(),b.getWest(),z),se=tileAt(b.getSouth(),b.getEast(),z),arr=[];for(let y=nw.y;y<=se.y;y++)for(let x=nw.x;x<=se.x;x++){const c=tileCenter(x,y,z);const step=360/(2**z),h=180/(2**z);if(inBoundary(c.lng,c.lat)||inBoundary(c.lng-step*.48,c.lat)||inBoundary(c.lng+step*.48,c.lat)||inBoundary(c.lng,c.lat-h*.48)||inBoundary(c.lng,c.lat+h*.48))arr.push({x,y,z})}return arr}
+function planJobs(){const set=new Set(),jobs=[];const add=t=>{const k=t.z+'/'+t.x+'/'+t.y;if(!set.has(k)){set.add(k);jobs.push(t)}};for(let z=14;z<=16;z++)for(const t of boundaryTiles(z))add(t);const stands=points.filter(p=>p.type==='Altana');for(const p of stands)for(let z=17;z<=19;z++)for(const t of tilesAround(p.lat,p.lng,.8,z))add(t);return {jobs,stands}}
+offlineBtn.onclick=async()=>{
+ if(downloading)return;if(!boundary)return alert('Prima premi «Confine VEPAR» per acquisire il perimetro ufficiale. Senza confine non scarico zone approssimative.');
+ if(!navigator.onLine)return alert('Serve Internet per scaricare le ortofoto.');
+ if(!('caches' in window))return alert('Cache Storage non disponibile.');
+ const {jobs,stands}=planJobs();if(!stands.length)return alert('Aggiungi prima almeno una altana.');
+ if(jobs.length>220000)return alert('Richiesta di '+jobs.length+' immagini: troppo grande per un unico download Safari. Occorre suddividerla.');
+ if(!confirm('Riserva VEPAR: zoom 14–16\n'+stands.length+' altane: 800 m ciascuna, zoom 17–19\n'+jobs.length+' immagini distinte (non duplicate)\nLe immagini già presenti vengono saltate. Il download può durare ore, Safari può sospenderlo e lo spazio offline può essere limitato. Verifica le condizioni d’uso DGU.\n\nAvviare?'))return;
+ const ready=await swReady;if(!ready)return alert('Service worker non pronto.');
+ downloading=true;cancelled=false;cancelBtn.hidden=false;offlineBtn.disabled=true;document.getElementById('boundary').disabled=true;
+ let ok=0,already=0,errors=0;const cache=await caches.open('hunting27-ortofoto-v1');
+ try{for(let k=0;k<jobs.length;k++){
+  if(cancelled)break;const url=layer.getTileUrl(jobs[k]);try{if(await cache.match(url)){already++}else{const r=await fetch(new Request(url,{mode:'no-cors',credentials:'omit'}));if(r.ok||r.type==='opaque'){await cache.put(url,r.clone());ok++}else errors++}}catch(e){errors++}
+  if(k%10===0||k===jobs.length-1)setStatus('Riserva + '+stands.length+' altane: '+(k+1)+'/'+jobs.length+' · nuove '+ok+' · già presenti '+already+' · errori '+errors);
+  if(k%30===0)await new Promise(r=>setTimeout(r,350));
+ }
+ if(!cancelled&&errors===0&&ok+already===jobs.length){offlineNativeZoom=19;localStorage.setItem(nativeZoomKey,'19');layer.options.maxNativeZoom=19;layer.redraw()}
+ setStatus((cancelled?'Interrotto':'Terminato')+' · nuove '+ok+' · già presenti '+already+' · errori '+errors);
+ alert('Download '+(cancelled?'interrotto':'terminato')+'. '+ok+' nuove, '+already+' già salvate, '+errors+' errori. Le risposte WMS opache non permettono di verificare che siano fotografie valide: controlla offline in modalità aereo.');
+ }finally{downloading=false;cancelBtn.hidden=true;offlineBtn.disabled=false;document.getElementById('boundary').disabled=false}
+};
+
+</script></body></html>
