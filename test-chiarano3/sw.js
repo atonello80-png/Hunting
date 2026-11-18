@@ -1,4 +1,4 @@
-const SHELL='chiarano-test-shell-v3',TILES='chiarano-test-ortofoto-v1';
+const SHELL='chiarano-test-shell-v4',TILES='chiarano-test-ortofoto-v1';
 const ASSETS=['./','./index.html','./manifest.webmanifest','./localita-test.js','./confine-test.js','./icon-180.png','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil((async()=>{
  const cache=await caches.open(SHELL);await cache.addAll(ASSETS);
