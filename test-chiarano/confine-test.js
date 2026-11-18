@@ -1,0 +1,1 @@
+// Confine acquisito al primo avvio online tramite pulsante Confine.
