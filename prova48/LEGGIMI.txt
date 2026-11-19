@@ -1,0 +1,4 @@
+Hunting 48 – VEPAR
+Pubblicare gli 8 file applicativi in prova48, non sovrascrivere prova47.
+Cache DGU condivisa se accessibile; nessuna cancellazione. Punti separati, lettura iniziale dei punti 47 se accessibili. Esportare i punti da 47 per sicurezza.
+Collaudare GPS, rotazione, schermo e ortofoto offline.
